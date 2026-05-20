@@ -89,7 +89,7 @@ def _call_llm_for_review(diff_content: str) -> str:
             "Content-Type": "application/json",
         },
         json=payload,
-        timeout=60,
+        timeout=30,
     )
     response.raise_for_status()
 
