@@ -93,7 +93,7 @@ def _extract_pr_info(payload: dict[str, Any]) -> tuple[str, int]:
         )
     if not isinstance(pr_number, int):
         raise HTTPException(status_code=400, detail="Invalid pull request number")
-    if pr_number <= 0:
+    if pr_number < 1:
         raise HTTPException(
             status_code=400, detail="Pull request number must be positive"
         )
