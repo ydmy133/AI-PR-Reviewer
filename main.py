@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 import os
 from typing import Optional
 
@@ -93,7 +94,16 @@ def _call_llm_for_review(diff_content: str) -> str:
     response.raise_for_status()
 
     data = response.json()
-    return data["choices"][0]["message"]["content"].strip()
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if not choices:
+        raise HTTPException(status_code=502, detail="LLM API returned empty choices")
+
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    content = message.get("content") if isinstance(message, dict) else None
+    if not content:
+        raise HTTPException(status_code=502, detail="LLM API returned invalid message content")
+
+    return content.strip()
 
 
 @app.post("/webhook")
@@ -105,7 +115,7 @@ async def github_webhook(
     body = await request.body()
     _verify_webhook_signature(body, x_hub_signature_256)
 
-    payload = await request.json()
+    payload = json.loads(body.decode("utf-8"))
 
     if x_github_event != "pull_request":
         return {"message": "Ignored: not a pull_request event"}
