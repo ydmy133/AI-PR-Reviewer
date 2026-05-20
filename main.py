@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import json
 import os
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -60,6 +60,32 @@ def _build_diff_content(pull) -> str:
     return "\n\n".join(parts)
 
 
+def _parse_webhook_payload(body: bytes) -> dict[str, Any]:
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    return payload
+
+
+def _extract_pr_info(payload: dict[str, Any]) -> tuple[str, int]:
+    repo = payload.get("repository")
+    pull_request = payload.get("pull_request")
+    if not isinstance(repo, dict) or not isinstance(pull_request, dict):
+        raise HTTPException(status_code=400, detail="Missing repository or pull_request data")
+
+    repo_full_name = repo.get("full_name")
+    pr_number = pull_request.get("number")
+    if not isinstance(repo_full_name, str) or not repo_full_name.strip():
+        raise HTTPException(status_code=400, detail="Invalid repository full_name")
+    if not isinstance(pr_number, int):
+        raise HTTPException(status_code=400, detail="Invalid pull request number")
+
+    return repo_full_name, pr_number
+
+
 def _call_llm_for_review(diff_content: str) -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -82,16 +108,19 @@ def _call_llm_for_review(diff_content: str) -> str:
         "temperature": 0.2,
     }
 
-    response = requests.post(
-        f"{api_base.rstrip('/')}/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=60,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            f"{api_base.rstrip('/')}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=60,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="LLM API request failed") from exc
 
     data = response.json()
     choices = data.get("choices") if isinstance(data, dict) else None
@@ -115,7 +144,7 @@ async def github_webhook(
     body = await request.body()
     _verify_webhook_signature(body, x_hub_signature_256)
 
-    payload = json.loads(body.decode("utf-8"))
+    payload = _parse_webhook_payload(body)
 
     if x_github_event != "pull_request":
         return {"message": "Ignored: not a pull_request event"}
@@ -123,8 +152,7 @@ async def github_webhook(
     if payload.get("action") != "opened":
         return {"message": "Ignored: pull_request action is not opened"}
 
-    repo_full_name = payload["repository"]["full_name"]
-    pr_number = payload["pull_request"]["number"]
+    repo_full_name, pr_number = _extract_pr_info(payload)
 
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
