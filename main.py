@@ -84,12 +84,17 @@ def _extract_pr_info(payload: dict[str, Any]) -> tuple[str, int]:
         raise HTTPException(
             status_code=400, detail="Repository full_name must be a string"
         )
-    if not repo_full_name.strip():
+    repo_full_name = repo_full_name.strip()
+    if not repo_full_name:
         raise HTTPException(
             status_code=400, detail="Repository full_name cannot be empty"
         )
     if not isinstance(pr_number, int):
         raise HTTPException(status_code=400, detail="Invalid pull request number")
+    if pr_number <= 0:
+        raise HTTPException(
+            status_code=400, detail="Pull request number must be positive"
+        )
 
     return repo_full_name, pr_number
 

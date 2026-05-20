@@ -68,6 +68,28 @@ class PullRequestInfoTests(unittest.TestCase):
         self.assertEqual(context.exception.status_code, 400)
         self.assertEqual(context.exception.detail, "Invalid pull request number")
 
+    def test_extract_pr_info_requires_positive_pr_number(self) -> None:
+        payload = {
+            "repository": {"full_name": "octo/repo"},
+            "pull_request": {"number": 0},
+        }
+        with self.assertRaises(HTTPException) as context:
+            _extract_pr_info(payload)
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertEqual(
+            context.exception.detail, "Pull request number must be positive"
+        )
+
+    def test_extract_pr_info_strips_full_name(self) -> None:
+        payload = {
+            "repository": {"full_name": "  octo/repo  "},
+            "pull_request": {"number": 7},
+        }
+        repo_full_name, pr_number = _extract_pr_info(payload)
+        self.assertEqual(repo_full_name, "octo/repo")
+        self.assertEqual(pr_number, 7)
+
     def test_extract_pr_info_returns_values(self) -> None:
         payload = {
             "repository": {"full_name": "octo/repo"},
