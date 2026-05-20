@@ -60,13 +60,15 @@ def _build_diff_content(pull) -> str:
     return "\n\n".join(parts)
 
 
-def _parse_webhook_payload(body: bytes) -> dict[str, Any]:
+def _parse_and_validate_webhook_payload(body: bytes) -> dict[str, Any]:
     try:
         payload = json.loads(body)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
+        raise HTTPException(status_code=400, detail="Malformed JSON payload") from exc
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        raise HTTPException(
+            status_code=400, detail="Webhook payload must be a JSON object"
+        )
     return payload
 
 
@@ -120,7 +122,9 @@ def _call_llm_for_review(diff_content: str) -> str:
         )
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail="LLM API request failed") from exc
+        raise HTTPException(
+            status_code=502, detail=f"LLM API request failed: {exc}"
+        ) from exc
 
     data = response.json()
     choices = data.get("choices") if isinstance(data, dict) else None
@@ -144,7 +148,7 @@ async def github_webhook(
     body = await request.body()
     _verify_webhook_signature(body, x_hub_signature_256)
 
-    payload = _parse_webhook_payload(body)
+    payload = _parse_and_validate_webhook_payload(body)
 
     if x_github_event != "pull_request":
         return {"message": "Ignored: not a pull_request event"}
