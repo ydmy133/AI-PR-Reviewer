@@ -80,8 +80,14 @@ def _extract_pr_info(payload: dict[str, Any]) -> tuple[str, int]:
 
     repo_full_name = repo.get("full_name")
     pr_number = pull_request.get("number")
-    if not isinstance(repo_full_name, str) or not repo_full_name.strip():
-        raise HTTPException(status_code=400, detail="Invalid repository full_name")
+    if not isinstance(repo_full_name, str):
+        raise HTTPException(
+            status_code=400, detail="Repository full_name must be a string"
+        )
+    if not repo_full_name.strip():
+        raise HTTPException(
+            status_code=400, detail="Repository full_name cannot be empty"
+        )
     if not isinstance(pr_number, int):
         raise HTTPException(status_code=400, detail="Invalid pull request number")
 
@@ -122,9 +128,7 @@ def _call_llm_for_review(diff_content: str) -> str:
         )
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise HTTPException(
-            status_code=502, detail=f"LLM API request failed: {exc}"
-        ) from exc
+        raise HTTPException(status_code=502, detail="LLM API request failed") from exc
 
     data = response.json()
     choices = data.get("choices") if isinstance(data, dict) else None
