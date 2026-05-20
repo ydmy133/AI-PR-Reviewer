@@ -76,7 +76,9 @@ def _extract_pr_info(payload: dict[str, Any]) -> tuple[str, int]:
     repo = payload.get("repository")
     pull_request = payload.get("pull_request")
     if not isinstance(repo, dict) or not isinstance(pull_request, dict):
-        raise HTTPException(status_code=400, detail="Missing repository or pull_request data")
+        raise HTTPException(
+            status_code=400, detail="Invalid repository or pull_request format"
+        )
 
     repo_full_name = repo.get("full_name")
     pr_number = pull_request.get("number")

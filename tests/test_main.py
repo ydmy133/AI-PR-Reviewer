@@ -34,7 +34,7 @@ class PullRequestInfoTests(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 400)
         self.assertEqual(
-            context.exception.detail, "Missing repository or pull_request data"
+            context.exception.detail, "Invalid repository or pull_request format"
         )
 
     def test_extract_pr_info_validates_full_name_type(self) -> None:
